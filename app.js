@@ -14,7 +14,6 @@ const pool = new Pool({
   database: process.env.DATABASE_NAME,
   password: process.env.DATABASE_PASSWORD,
   port: process.env.DATABASE_PORT,
-  ssl: { rejectUnauthorized: false },
 });
 
 const app = express();
@@ -25,11 +24,13 @@ app.use(session({ secret: "cats", resave: false, saveUninitialized: false }));
 app.use(passport.session());
 app.use(express.urlencoded({ extended: false }));
 
-app.get("/", (req, res) => res.render("index", { user: req.user }));
-app.get("/sign-up", (req, res) => res.render("signUp-form"));
+app.get("/", (req, res) => {
+    res.render("index", { user: req.user });
+  });
+  app.get("/sign-up", (req, res) => res.render("signUp-form"));
 app.post("/sign-up", async (req, res, next) => {
   try {
-    pool.query("INSERT INTO users (username, password) VALUES ($1, $2)", [
+    await pool.query("INSERT INTO users (username, password) VALUES ($1, $2)", [
       req.body.username,
       req.body.password,
     ]);
@@ -55,9 +56,9 @@ app.get("/log-out", (req, res, next) => {
 });
 
 passport.use(
-  new LocalStrategy(async (usernmae, password, done) => {
-    const { rows } = await db.query("SELECT * users WHERE username = $1", [
-      usernmae,
+  new LocalStrategy(async (username, password, done) => {
+    const { rows } = await pool.query("SELECT * FROM users WHERE username = $1", [
+      username,
     ]);
     const user = rows[0];
 
@@ -65,7 +66,7 @@ passport.use(
       if (!user) {
         return done(null, false, { message: "Incorrect username" });
       }
-      if (user.passport !== password) {
+      if (user.password !== password) {
         return done(null, false, { message: "Incorrect password" });
       }
       return done(null, user);
@@ -76,11 +77,11 @@ passport.use(
 );
 
 passport.serializeUser((user, done) => {
-  return done(nul, user.is);
+  return done(null, user.id);
 });
 passport.deserializeUser(async (id, done) => {
   try {
-    const { rows } = db.query("SELECT * FROM users WHERE id = $1", [id]);
+    const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [id]);
     const user = rows[0];
 
     return done(null, user);
